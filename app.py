@@ -270,7 +270,7 @@ with st.sidebar:
     </style>
     """, unsafe_allow_html=True)
     
-    if st.button("➕ 新建分析任务", key="new_task_main", type="primary", use_container_width=True):
+    if st.button("+新建分析任务", key="new_task_main", type="primary", use_container_width=True):
         st.session_state.current_task_id = None
         st.rerun()
     
@@ -285,14 +285,14 @@ with st.sidebar:
 
 # --- 5. 主界面 ---
 if st.session_state.current_task_id is None:
-    st.title("🚀 新建分析任务")
+    st.title("新建分析任务")
     
     col1, col2 = st.columns([1, 1])
     with col1:
-        uploaded_excel = st.file_uploader("1. Excel 报表", type=["xlsx", "xls"])
-        uploaded_image = st.file_uploader("2. 图片", type=["png", "jpg", "jpeg"])
-        uploaded_video = st.file_uploader("3. 视频", type=["mp4", "mov"])
-        start_btn = st.button("🚀 开始智能分析", type="primary", use_container_width=True)
+        uploaded_excel = st.file_uploader("1. 周期性复盘报告", type=["xlsx", "xls"])
+        uploaded_image = st.file_uploader("2. 商品主图", type=["png", "jpg", "jpeg"])
+        uploaded_video = st.file_uploader("3. 低绩效视频", type=["mp4", "mov"])
+        start_btn = st.button("开始分析", type="primary", use_container_width=True)
 
     if start_btn:
         if not (uploaded_excel and uploaded_image and uploaded_video):

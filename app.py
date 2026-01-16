@@ -168,69 +168,57 @@ def find_col(columns, keywords):
     return None
 
 def process_excel_data(file):
-    """
-    Excel 处理核心逻辑 (使用 pivot_table 增强版)
-    """
+    """Excel 处理核心逻辑 (Pivot Table 版)"""
     try:
         xls = pd.ExcelFile(file)
         data_bundle = {}
         
-        # 1. 定义映射关系
         sheet_mapping = {
             "分时段数据": "分日数据",
             "商品-gmv max": "商品明细数据",
             "素材-gmv max": "素材明细数据"
         }
         
-        material_df = None # 暂存素材表
+        material_df = None 
         
         # --- 第一步：遍历 Sheet ---
         for sheet_name in xls.sheet_names:
             clean_name = sheet_name.strip()
-            
             for key_keyword, json_key in sheet_mapping.items():
                 if key_keyword in clean_name:
                     df = pd.read_excel(xls, sheet_name=sheet_name)
-                    
-                    # 存入 JSON 包 (明细数据)
                     data_bundle[json_key] = df.to_dict(orient='records')
-                    
-                    # 捕获素材表
                     if json_key == "素材明细数据":
                         material_df = df
         
-        # --- 第二步：使用 pivot_table 计算“账号表现” ---
+        # --- 第二步：Pivot Table 计算账号表现 ---
         if material_df is not None:
-            # 1. 找列名
-            acc_col = find_col(material_df.columns, ['Tiktok account'])
-            cost_col = find_col(material_df.columns, ['花费'])
-            gmv_col = find_col(material_df.columns, ['总收入'])
+            acc_col = find_col(material_df.columns, ['账号', '发布账号', 'Account', '达人', 'Handle'])
+            cost_col = find_col(material_df.columns, ['消耗', '花费', 'Cost', 'Spend'])
+            gmv_col = find_col(material_df.columns, ['GMV', 'gmv', '支付GMV', '收入', '成交'])
             
             if acc_col and cost_col and gmv_col:
-                # 2. 关键步骤：数据清洗 (防止数字被当成字符串，导致无法求和)
-                # errors='coerce' 会把无法转数字的变成 NaN，然后 fillna(0) 变成 0
+                # 强制转数值，防止报错
                 material_df[cost_col] = pd.to_numeric(material_df[cost_col], errors='coerce').fillna(0)
                 material_df[gmv_col] = pd.to_numeric(material_df[gmv_col], errors='coerce').fillna(0)
                 
-                # 3. 使用 Pivot Table 进行透视
+                # 透视表聚合
                 account_summary = pd.pivot_table(
                     material_df,
-                    index=acc_col,          # 行：账号
-                    values=[cost_col, gmv_col], # 值：消耗，GMV
-                    aggfunc='sum',          # 算法：求和
-                    fill_value=0            # 空值填0
-                ).reset_index()             # 重置索引，变回普通表格
+                    index=acc_col,
+                    values=[cost_col, gmv_col],
+                    aggfunc='sum',
+                    fill_value=0
+                ).reset_index()
                 
-                # 4. 计算 ROAS
+                # 计算 ROAS
                 account_summary['ROAS'] = account_summary.apply(
                     lambda x: round(x[gmv_col] / x[cost_col], 2) if x[cost_col] > 0 else 0, 
                     axis=1
                 )
                 
-                # 5. 排序 (按消耗降序)
+                # 排序
                 account_summary = account_summary.sort_values(by=cost_col, ascending=False)
-                
-                # 6. 存入 JSON
                 data_bundle["账号表现"] = account_summary.to_dict(orient='records')
             else:
                 data_bundle["账号表现"] = {"Error": "汇总失败：未找到账号/消耗/GMV列"}
@@ -250,20 +238,4 @@ def upload_media(file, mime_type):
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file.name.split('.')[-1]}") as tmp:
             tmp.write(file.getvalue())
             tmp_path = tmp.name
-        g_file = genai.upload_file(tmp_path, mime_type=mime_type)
-        return g_file
-    except: return None
-
-# --- 4. 侧边栏 ---
-with st.sidebar:
-    st.title("TTS广告分析工作台")
-    st.markdown("""
-    <style>
-    div.stButton > button[kind="primary"] {
-        background: linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%);
-        border: none; color: white; font-weight: bold;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    if st.button("
+        g_file = genai.upload_file(tmp_path, mime_

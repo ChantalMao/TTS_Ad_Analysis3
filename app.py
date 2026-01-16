@@ -329,7 +329,7 @@ if st.session_state.current_task_id is None:
                 # STEP 5: 呼叫 AI
                 status.write("🤖 生成报告中...")
                 try:
-                    model = genai.GenerativeModel("gemini-1.5-pro", system_instruction=GEM_SYSTEM_INSTRUCTION)
+                    model = genai.GenerativeModel("gemini-2.5-pro", system_instruction=GEM_SYSTEM_INSTRUCTION)
                     chat = model.start_chat(history=[])
                     
                     # 按照你的要求提交结构化 JSON

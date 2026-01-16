@@ -210,13 +210,13 @@ def process_excel_data(file):
             
             if acc_col and cost_col and gmv_col:
                 # 2. 使用数据透视表汇总计算
-        # 按账号分组，对消耗和GMV求和
-        account_summary = material_df.pivot_table(
-            index=acc_col,
-            values=[cost_col, gmv_col],
-            aggfunc='sum',
-            fill_value=0
-        ).reset_index()
+                # 按账号分组，对消耗和GMV求和
+                account_summary = material_df.pivot_table(
+                    index=acc_col,
+                    values=[cost_col, gmv_col],
+                    aggfunc='sum',
+                    fill_value=0
+                ).reset_index()
         
         # 重命名列，确保列名清晰
         account_summary.columns = [acc_col, cost_col, gmv_col]

@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 
 # --- 1. 配置区域 ---
-st.set_page_config(page_title="GMV 智能分析工作台", layout="wide")
+st.set_page_config(page_title="GMV MAX分析工作台", layout="wide")
 
 # (A) API Key 配置
 if "GEMINI_API_KEY" in st.secrets:
@@ -86,7 +86,7 @@ def upload_media(file, mime_type):
 
 # --- 4. 侧边栏：任务导航 ---
 with st.sidebar:
-    st.title("工作台")
+    st.title("TTS广告分析工作台")
     
     # 新建任务按钮
     if st.button("新建分析任务", key="new_task_main", type="primary", use_container_width=True):

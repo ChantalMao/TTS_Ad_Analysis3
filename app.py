@@ -193,9 +193,9 @@ def process_excel_data(file):
         
         # --- 第二步：Pivot Table 计算账号表现 ---
         if material_df is not None:
-            acc_col = find_col(material_df.columns, ['账号', '发布账号', 'Account', '达人', 'Handle'])
-            cost_col = find_col(material_df.columns, ['消耗', '花费', 'Cost', 'Spend'])
-            gmv_col = find_col(material_df.columns, ['GMV', 'gmv', '支付GMV', '收入', '成交'])
+            acc_col = find_col(material_df.columns, ['Tiktok account'])
+            cost_col = find_col(material_df.columns, ['花费'])
+            gmv_col = find_col(material_df.columns, ['总收入'])
             
             if acc_col and cost_col and gmv_col:
                 # 强制转数值，防止报错

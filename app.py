@@ -86,10 +86,10 @@ def upload_media(file, mime_type):
 
 # --- 4. 侧边栏：任务导航 ---
 with st.sidebar:
-    st.title("🗂️ 工作台")
+    st.title("工作台")
     
     # 新建任务按钮
-    if st.button("➕ 新建分析任务", key="new_task_main", type="primary", use_container_width=True):
+    if st.button("新建分析任务", key="new_task_main", type="primary", use_container_width=True):
         st.session_state.current_task_id = None
         st.rerun()
     
@@ -115,37 +115,29 @@ with st.sidebar:
 
 # SCENE 1: 新建任务界面 (如果当前ID为空)
 if st.session_state.current_task_id is None:
-    st.title("🚀 新建分析任务")
+    st.title("新建分析任务")
     st.caption("上传素材后，系统将自动创建新会话")
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        uploaded_excel = st.file_uploader("1. Excel 报表 (必填)", type=["xlsx", "xls"])
-        uploaded_image = st.file_uploader("2. 广告封面图 (必填)", type=["png", "jpg", "jpeg", "webp"])
-        uploaded_video = st.file_uploader("3. 广告视频 (必填)", type=["mp4", "mov", "avi"])
-
-    with col2:
-        st.info("💡 提示：")
-        st.markdown("""
-        - 点击 **开始分析** 后，系统会自动生成任务 ID (如 0116-01)。
-        - 图片和视频将**不再预览**，直接在后台处理。
-        - 分析过程可能需要 30-60秒，请耐心等待。
-        """)
+        uploaded_excel = st.file_uploader("1. 周期性复盘报告", type=["xlsx", "xls"])
+        uploaded_image = st.file_uploader("2. 商品主图", type=["png", "jpg", "jpeg", "webp"])
+        uploaded_video = st.file_uploader("3. 低绩效视频", type=["mp4", "mov", "avi"])
         
-        start_btn = st.button("🚀 开始分析", type="primary", use_container_width=True)
+        start_btn = st.button("开始分析", type="primary", use_container_width=True)
 
     if start_btn:
         if not (uploaded_excel and uploaded_image and uploaded_video):
-            st.error("⚠️ 资料不全！请必须同时上传：Excel、图片 和 视频。")
+            st.error("⚠️ 资料不全！必须上传：Excel、图片和视频。")
         else:
-            with st.status("🚀 正在启动任务...", expanded=True) as status:
+            with st.status("正在启动任务...", expanded=True) as status:
                 
                 # 1. 解析 Excel
                 status.write("📊 1/4 正在解析 Excel 数据...")
                 json_data = process_excel_data(uploaded_excel)
                 if not json_data:
-                    status.update(label="❌ Excel 解析失败", state="error")
+                    status.update(label="❌ Excel解析失败", state="error")
                     st.error("Excel 未找到指定 Sheet。")
                     st.stop()
                 time.sleep(0.5)
@@ -165,12 +157,12 @@ if st.session_state.current_task_id is None:
                     st.stop()
                 
                 # 4. 等待视频转码 (带超时)
-                status.write("⏳ 4/4 等待 Google 视频转码 (最长 60s)...")
+                status.write("⏳ 4/4 等待 Google 视频转码 (最长 90s)...")
                 is_processed = False
                 wait_seconds = 0
                 progress_bar = st.progress(0)
                 
-                while wait_seconds < 60:
+                while wait_seconds < 90:
                     file_check = genai.get_file(vid_file.name)
                     if file_check.state.name == "ACTIVE":
                         is_processed = True
@@ -198,7 +190,7 @@ if st.session_state.current_task_id is None:
                 status.write("🤖 素材就绪，正在生成分析报告...")
                 try:
                     model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash",
+                        model_name="gemini-3.0-pro",
                         system_instruction=GEM_SYSTEM_INSTRUCTION
                     )
                     chat = model.start_chat(history=[])

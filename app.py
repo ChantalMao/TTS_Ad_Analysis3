@@ -190,7 +190,7 @@ if st.session_state.current_task_id is None:
                 status.write("🤖 素材就绪，正在生成分析报告...")
                 try:
                     model = genai.GenerativeModel(
-                        model_name="gemini-3.0-pro",
+                        model_name="gemini-2.5-pro",
                         system_instruction=GEM_SYSTEM_INSTRUCTION
                     )
                     chat = model.start_chat(history=[])

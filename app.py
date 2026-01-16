@@ -203,33 +203,42 @@ def process_excel_data(file):
         
         # --- 第二步：新建虚拟 Sheet "账号表现" ---
         if material_df is not None:
-            # 1. 找列名
-            acc_col = find_col(material_df.columns, ['Tiktok account'])
-            cost_col = find_col(material_df.columns, ['花费'])
-            gmv_col = find_col(material_df.columns, ['总收入'])
+    # 1. 找列名
+    acc_col = find_col(material_df.columns, ['Tiktok account'])
+    cost_col = find_col(material_df.columns, ['花费'])
+    gmv_col = find_col(material_df.columns, ['总收入'])
+    
+    if acc_col and cost_col and gmv_col:
+        # 2. 使用数据透视表汇总计算
+        try:
+            # 按账号分组，对消耗和GMV求和
+            account_summary = material_df.pivot_table(
+                index=acc_col,
+                values=[cost_col, gmv_col],
+                aggfunc='sum',
+                fill_value=0
+            ).reset_index()
             
-            if acc_col and cost_col and gmv_col:
-                # 2. 使用数据透视表汇总计算
-                # 按账号分组，对消耗和GMV求和
-                account_summary = material_df.pivot_table(
-                    index=acc_col,
-                    values=[cost_col, gmv_col],
-                    aggfunc='sum',
-                    fill_value=0
-                ).reset_index()
-        
-        # 重命名列，确保列名清晰
-        account_summary.columns = [acc_col, cost_col, gmv_col]
-        
-        # 3. 计算 ROAS
-        account_summary['ROAS'] = account_summary.apply(
-            lambda x: round(x[gmv_col] / x[cost_col], 2) if x[cost_col] > 0 else 0, 
-            axis=1
-        )
-                
-                # 4. 排序 (按消耗降序)
-                account_summary = account_summary.sort_values(by=cost_col, ascending=False)
-                
+            # 重命名列，确保列名清晰
+            account_summary.columns = [acc_col, cost_col, gmv_col]
+            
+            # 3. 计算 ROAS
+            account_summary['ROAS'] = account_summary.apply(
+                lambda x: round(x[gmv_col] / x[cost_col], 2) if x[cost_col] > 0 else 0, 
+                axis=1
+            )
+            
+            # 按消耗排序（如果需要）
+            account_summary = account_summary.sort_values(by=cost_col, ascending=False)
+            
+        except Exception as e:
+            print(f"数据透视表计算出错: {e}")
+            # 备用方案：使用原始分组方法
+            account_summary = material_df.groupby(acc_col)[[cost_col, gmv_col]].sum().reset_index()
+            account_summary['ROAS'] = account_summary.apply(
+                lambda x: round(x[gmv_col] / x[cost_col], 2) if x[cost_col] > 0 else 0, 
+                axis=1
+            )  
                 # 5. 存入 JSON 包 (这就是你要求的“新建一个sheet”)
                 data_bundle["账号表现"] = account_summary.to_dict(orient='records')
             else:

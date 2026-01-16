@@ -41,9 +41,10 @@ GEM_SYSTEM_INSTRUCTION = """
 ## Input Data Context (我将提供的资料)
 1.  **广告数据-分日数据** (JSON): 包含账户整体的日期、花费、ROAS等趋势。
 2.  **广告数据-商品维度数据** (JSON): 包含不同商品的ID、标题、花费(Cost)、ROAS等。
-3.  **广告数据-素材明细数据** (JSON): VideoId, 状态, 花费, CTR, CVR等。
-4.  **商品主图** (图片附件): 对应重点商品的图片。
-5.  **视频素材** (视频文件): 需要优化的低绩效或待分析视频。
+3. **广告数据-账号表现**: 包含账号维度的花费、ROAS等数据。
+4.  **广告数据-素材明细数据** (JSON): VideoId, 状态, 花费, CTR, CVR等。
+5.  **商品主图** (图片附件): 对应重点商品的图片。
+6.  **视频素材** (视频文件): 需要优化的低绩效或待分析视频。
 
 ## Critical Execution Logic (执行逻辑 - 必须严格遵守)
 **步骤一：自动背景识别 (Context Extraction)**
@@ -88,8 +89,18 @@ GEM_SYSTEM_INSTRUCTION = """
 * **视觉建议**：(例如：背景杂乱建议纯白底、缺乏使用场景建议增加模特图、卖点不突出建议增加贴片文案)
 
 ### 四、 素材与内容深度诊断
+**1. 账号表现对比 (Account Performance)**
+*基于【广告数据-账号表现】及【素材明细数据】进行统计。*
+ 
+| TikTok Account | 发布素材数量 | 总花费 | 总收入 | 账号ROAS | 效能评价 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| [Account名称] | [数量] | [金额] | [金额] | [数值] | **主力账号** (高花费高ROAS) |
+| [Account名称] | [数量] | [金额] | [金额] | [数值] | **潜力账号** (低花费高ROAS) |
+| [Account名称] | [数量] | [金额] | [金额] | [数值] | **亏损账号** (低ROAS) |
+ 
+* **账号策略建议**：(基于上表，建议哪些账号应加大投入，哪些应暂停或整改)
 
-**1. 素材绩效象限分析 (表格)**
+**2. 素材绩效象限分析 (表格)**
 基于【素材明细数据】，将素材分类。
 * **ID显示注意**：Video ID必须完整显示。
 
@@ -100,7 +111,7 @@ GEM_SYSTEM_INSTRUCTION = """
 | 潜力素材 | 低花费/高ROAS | ... | 逐步提价测试 |
 | 待淘汰素材 | 低花费/低ROAS | ... | 立即关停 |
 
-**2. 低绩效视频深度归因**
+**3. 低绩效视频深度归因**
 针对提供的具体视频文件进行分析。
 *重点分析为何该视频投放效果不佳。*
 
@@ -148,26 +159,69 @@ def generate_task_id():
                 pass
     return f"{today_str}-{count:02d}"
 
+def find_col(columns, keywords):
+    """辅助函数：模糊查找列名"""
+    for col in columns:
+        for kw in keywords:
+            if kw in col: # 只要包含关键词就算匹配 (比如 "消耗(元)" 匹配 "消耗")
+                return col
+    return None
+
 def process_excel_data(file):
-    """Excel 转 JSON"""
+    """
+    Excel 处理核心函数
+    功能：
+    1. 读取所有 Sheet 转 JSON
+    2. 特别针对 '素材-gmv max' 进行账号维度的 GroupBy 汇总
+    """
     try:
         xls = pd.ExcelFile(file)
         data_bundle = {}
+        
         target_sheets = {
             "分时段数据": "分时段表现",
             "商品-gmv max": "商品GMV明细",
             "素材-gmv max": "素材GMV明细"
         }
+        
         found = False
         for sheet_name in xls.sheet_names:
             clean_name = sheet_name.strip()
             for key, alias in target_sheets.items():
                 if key in clean_name:
                     df = pd.read_excel(xls, sheet_name=sheet_name)
+                    
+                    # 1. 保存原始明细数据
                     data_bundle[alias] = df.to_dict(orient='records')
                     found = True
+                    
+                    # --- 新增逻辑：如果是素材表，进行账号汇总 ---
+                    if key == "素材-gmv max":
+                        # 1. 模糊匹配列名
+                        account_col = find_col(df.columns, ['账号', '发布账号', 'Account', '达人'])
+                        cost_col = find_col(df.columns, ['消耗', '花费', 'Cost'])
+                        gmv_col = find_col(df.columns, ['GMV', 'gmv', '支付GMV', '收入', '成交'])
+                        
+                        if account_col and cost_col and gmv_col:
+                            # 2. 聚合计算
+                            summary = df.groupby(account_col)[[cost_col, gmv_col]].sum().reset_index()
+                            
+                            # 3. 计算 ROAS (避免除以0)
+                            summary['ROAS'] = summary.apply(
+                                lambda x: round(x[gmv_col] / x[cost_col], 2) if x[cost_col] > 0 else 0, 
+                                axis=1
+                            )
+                            
+                            # 4. 排序 (按消耗降序)
+                            summary = summary.sort_values(by=cost_col, ascending=False)
+                            
+                            # 5. 存入数据包
+                            data_bundle["[特别计算]各账号汇总数据"] = summary.to_dict(orient='records')
+                            
         return str(data_bundle) if found else None
-    except: return None
+    except Exception as e:
+        st.error(f"Excel 处理出错: {e}")
+        return None
 
 def upload_media(file, mime_type):
     """上传文件到 Gemini"""
@@ -183,17 +237,14 @@ def upload_media(file, mime_type):
 with st.sidebar:
     st.title("TTS广告分析工作台")
     
-    # 新建任务按钮
-    if st.button("新建分析任务", key="new_task_main", type="primary", use_container_width=True):
+    if st.button("➕ 新建分析任务", key="new_task_main", type="primary", use_container_width=True):
         st.session_state.current_task_id = None
         st.rerun()
     
     st.divider()
     st.subheader("历史记录")
     
-    # 获取任务列表并排序
     tasks = sorted(list(st.session_state.sessions.keys()), reverse=True)
-    
     if not tasks:
         st.caption("暂无历史任务")
     
@@ -201,40 +252,45 @@ with st.sidebar:
         label = f"📂 {t_id}"
         if t_id == st.session_state.current_task_id:
             label = f"🟢 {t_id} (当前)"
-            
         if st.button(label, key=f"btn_{t_id}", use_container_width=True):
             st.session_state.current_task_id = t_id
             st.rerun()
 
 # --- 5. 主界面逻辑 ---
 
-# SCENE 1: 新建任务界面 (如果当前ID为空)
+# SCENE 1: 新建任务界面
 if st.session_state.current_task_id is None:
-    st.title("新建分析任务")
-    st.caption("上传素材后，系统将自动创建新会话")
+    st.title("🚀 新建分析任务")
+    st.caption("系统将自动对【发布账号】维度进行汇总计算，并提交给 AI")
     
     col1, col2 = st.columns([1, 1])
     
     with col1:
-        uploaded_excel = st.file_uploader("1. 周期性复盘报告", type=["xlsx", "xls"])
-        uploaded_image = st.file_uploader("2. 商品主图", type=["png", "jpg", "jpeg", "webp"])
-        uploaded_video = st.file_uploader("3. 低绩效视频", type=["mp4", "mov", "avi"])
+        uploaded_excel = st.file_uploader("1. 周期性复盘报告 (Excel)", type=["xlsx", "xls"])
+        uploaded_image = st.file_uploader("2. 核心商品主图", type=["png", "jpg", "jpeg", "webp"])
+        uploaded_video = st.file_uploader("3. 低绩效视频素材", type=["mp4", "mov", "avi"])
         
-        start_btn = st.button("开始分析", type="primary", use_container_width=True)
+        start_btn = st.button("🚀 开始智能分析", type="primary", use_container_width=True)
 
     if start_btn:
         if not (uploaded_excel and uploaded_image and uploaded_video):
             st.error("⚠️ 资料不全！必须上传：Excel、图片和视频。")
         else:
-            with st.status("正在启动任务...", expanded=True) as status:
+            with st.status("🚀 正在启动全流程分析...", expanded=True) as status:
                 
                 # 1. 解析 Excel
-                status.write("📊 1/4 正在解析 Excel 数据...")
+                status.write("📊 1/4 正在解析 Excel 并汇总账号数据...")
                 json_data = process_excel_data(uploaded_excel)
+                
                 if not json_data:
                     status.update(label="❌ Excel解析失败", state="error")
-                    st.error("Excel 未找到指定 Sheet。")
+                    st.error("Excel 未找到指定 Sheet (分时段/商品/素材)。")
                     st.stop()
+                
+                if "[特别计算]各账号汇总数据" in json_data:
+                    status.write("✅ 已成功提取并汇总各账号 ROAS 数据")
+                else:
+                    status.write("⚠️ 未检测到账号列，跳过账号汇总，仅分析明细")
                 time.sleep(0.5)
 
                 # 2. 上传图片
@@ -251,7 +307,7 @@ if st.session_state.current_task_id is None:
                     status.update(label="❌ 视频上传失败", state="error")
                     st.stop()
                 
-                # 4. 等待视频转码 (带超时)
+                # 4. 等待视频转码
                 status.write("⏳ 4/4 等待 Google 视频转码 (最长 90s)...")
                 is_processed = False
                 wait_seconds = 0
@@ -269,11 +325,7 @@ if st.session_state.current_task_id is None:
                     
                     time.sleep(2)
                     wait_seconds += 2
-                    
-                    # ⚠️ 修复点：强制转换为整数 int()
-                    progress_value = int(min(wait_seconds * 1.5, 95))
-                    progress_bar.progress(progress_value)
-                    
+                    progress_bar.progress(int(min(wait_seconds * 1.5, 95)))
                     status.write(f"⏳ Google 转码中... {wait_seconds}s")
 
                 if not is_processed:
@@ -282,10 +334,11 @@ if st.session_state.current_task_id is None:
                     st.stop()
 
                 # 5. 呼叫 Gemini
-                status.write("🤖 素材就绪，正在生成分析报告...")
+                status.write("🤖 素材就绪，正在生成深度分析报告...")
                 try:
+                    # 使用 1.5-pro 以获得更好效果，如果没权限请改回 1.5-flash
                     model = genai.GenerativeModel(
-                        model_name="gemini-2.5-pro",
+                        model_name="gemini-2.5-pro", 
                         system_instruction=GEM_SYSTEM_INSTRUCTION
                     )
                     chat = model.start_chat(history=[])
@@ -300,6 +353,7 @@ if st.session_state.current_task_id is None:
                     
                     # 创建任务
                     new_task_id = generate_task_id()
+                    
                     st.session_state.sessions[new_task_id] = {
                         "chat": chat,
                         "history": [
@@ -317,7 +371,7 @@ if st.session_state.current_task_id is None:
                     status.update(label="❌ AI 分析出错", state="error")
                     st.error(f"API 错误: {e}")
 
-# SCENE 2: 历史任务详情页 (Chat 界面)
+# SCENE 2: 历史任务详情页
 else:
     task_id = st.session_state.current_task_id
     
@@ -330,8 +384,8 @@ else:
     history = session_data["history"]
     
     st.title(f"📂 任务详情: {task_id}")
-    
-    # 显示历史
+
+    # 显示对话历史
     for msg in history:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])

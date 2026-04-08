@@ -344,7 +344,7 @@ if st.session_state.current_task_id is None:
                 # STEP 5: AI
                 status.write("🤖 生成报告中...")
                 try:
-                    model = genai.GenerativeModel("gemini-3.0", system_instruction=GEM_SYSTEM_INSTRUCTION)
+                    model = genai.GenerativeModel("gemini-3.1-pro-preview", system_instruction=GEM_SYSTEM_INSTRUCTION)
                     chat = model.start_chat(history=[])
                     
                     resp = chat.send_message([f"数据JSON:\n```json\n{json_data}\n```", img_file, vid_file])
